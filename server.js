@@ -10,7 +10,7 @@ const app = express();
 
 // 2) Middleware
 app.use(cors({
-  origin: 'https://exceptionz.vercel.app',
+  origin: 'https://www.exceptionz.in',
   methods: ['GET', 'POST'],
   credentials: true
 }));
