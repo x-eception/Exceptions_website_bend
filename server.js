@@ -8,33 +8,50 @@ const Contact = require('./models/Contact');
 
 const app = express();
 
-// ✅ Allow your frontend domain only
+// ✅ Allow only your frontend domain
 app.use(cors({
   origin: 'https://www.exceptionz.in',
   methods: ['GET', 'POST'],
   credentials: true,
 }));
+
 app.use(express.json());
 
-// ✅ POST /api/contact
+// ✅ POST: /api/contact
 app.post('/api/contact', async (req, res) => {
   const { name, email, mobile, ask } = req.body;
 
   try {
-    // ✅ Save contact to MongoDB
+    // ✅ Save to DB (only name, email, mobile)
     await Contact.create({ name, email, mobile });
 
-    // ✅ Create transporter
+    // ✅ Setup Nodemailer
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.EMAIL_USER,     // e.g., exceptionz13@gmail.com
-        pass: process.env.EMAIL_PASS,     // Gmail App Password
+        user: process.env.EMAIL_USER, // Your sender email
+        pass: process.env.EMAIL_PASS, // App password (NOT your real password)
       },
     });
 
-    // ✅ 1. Send welcome email to user
-    const userMail = {
+    // ✅ 1. Mail to Admin (you)
+    const internalMail = {
+      from: `"${name}" <${process.env.EMAIL_USER}>`, // shown as: John Doe <your@email>
+      to: process.env.EMAIL_USER, // send to you
+      replyTo: email, // reply goes to user
+      subject: `❓ Question from ${name}`,
+      html: `
+        <h3>New Contact from ${name}</h3>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Mobile:</strong> ${mobile}</p>
+        ${ask ? `<p><strong>Question:</strong> ${ask}</p>` : ''}
+      `,
+    };
+
+    await transporter.sendMail(internalMail);
+
+    // ✅ 2. Mail to User (welcome message)
+    const welcomeMail = {
       from: process.env.EMAIL_USER,
       to: email,
       subject: 'Welcome to Exceptions!',
@@ -42,35 +59,17 @@ app.post('/api/contact', async (req, res) => {
         <h3>Hello ${name},</h3>
         <p>Thanks for contacting <strong>Exceptions</strong>!</p>
         <p>We're excited to connect and help with your tech journey.</p>
-        ${ask ? `<hr/><h4>Your Question:</h4><p>${ask}</p>` : ''}
+        ${ask ? `<hr/><h4>You asked:</h4><p>${ask}</p>` : ''}
         <br/>
         <p>Best regards,<br/>Team Exceptions 🚀</p>
       `,
     };
-    await transporter.sendMail(userMail);
 
-    // ✅ 2. Send Ask Anything to internal team (FROM user's email via replyTo)
-    if (ask) {
-      const internalMail = {
-        from: process.env.EMAIL_USER,  // still sent by server, but replyTo is user's
-        to: process.env.EMAIL_USER,    // send to self (team inbox)
-        subject: `❓ Question from ${name} (${email})`,
-        replyTo: email,
-        html: `
-          <h3>${name} asked a question:</h3>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Mobile:</strong> ${mobile}</p>
-          <hr/>
-          <p><strong>Question:</strong></p>
-          <p>${ask}</p>
-        `,
-      };
-      await transporter.sendMail(internalMail);
-    }
+    await transporter.sendMail(welcomeMail);
 
     res.status(201).json({ message: 'Form submitted & emails sent!' });
   } catch (err) {
-    console.error('❌ Error submitting contact:', err);
+    console.error('❌ Error in contact submission:', err);
     res.status(500).json({ error: 'Server error. Try again later.' });
   }
 });
